@@ -36,7 +36,35 @@ func getDefaultInputDevice() -> AudioDeviceID {
 }
 
 
-// Find and print the current default input device.
+// find and print the current default input device
 let deviceID = getDefaultInputDevice()
 
-print("Default input device ID: \(deviceID)")
+// get the human-readable name of the audio device
+var name: CFString = "" as CFString
+
+var nameAddress = AudioObjectPropertyAddress(
+    mSelector: kAudioObjectPropertyName,
+    mScope: kAudioObjectPropertyScopeGlobal,
+    mElement: kAudioObjectPropertyElementMain
+)
+
+var nameSize = UInt32(MemoryLayout<CFString?>.size)
+
+let nameStatus = withUnsafeMutablePointer(to: &name) { pointer in
+    AudioObjectGetPropertyData(
+        deviceID,
+        &nameAddress,
+        0,
+        nil,
+        &nameSize,
+        pointer
+    )
+}
+
+if nameStatus == noErr {
+    print("Default input device: \(name)")
+} else {
+    print("Could not get device name.")
+}
+
+print("Device ID: \(deviceID)")
