@@ -141,6 +141,89 @@ func setInputVolume(deviceID: AudioDeviceID,volume: Float32) -> Bool {
     return true
 }
 
+final class MicrophoneVolumeManager {
+
+    // the mic volume before setting to 0
+    private var savedVolume: Float32?
+
+    // whether the current 0% volume was set by this program (could have already been at 0)
+    private(set) var isVolumeZeroed = false
+
+
+    // toggles between: normal -> 0 and 0 -> previously saved volume
+    func toggle() {
+
+        let deviceID = getDefaultInputDevice()
+
+        // restore the saved volume
+        if isVolumeZeroed {
+
+            guard let savedVolume else {
+                print("ERROR: No saved microphone volume.")
+                return
+            }
+
+            print(
+                String(
+                    format: "Restoring input volume to %.1f%%...",
+                    savedVolume * 100
+                )
+            )
+
+            let success = setInputVolume(
+                deviceID: deviceID,
+                volume: savedVolume
+            )
+
+            guard success else {
+                print("Failed to restore input volume.")
+                return
+            }
+
+            // the mic is no longer zeroed, update
+            self.savedVolume = nil
+            self.isVolumeZeroed = false
+
+            print("Microphone volume restored.")
+
+            return
+        }
+
+        // save the current volume and set it to 0
+        guard let currentVolume = getInputVolume(
+            deviceID: deviceID
+        ) else {
+            print("Could not read current input volume.")
+            return
+        }
+
+        // save the exact value to restore later
+        savedVolume = currentVolume
+
+        print(
+            String(
+                format: "Saving current volume: %.1f%%",
+                currentVolume * 100
+            )
+        )
+
+        let success = setInputVolume(
+            deviceID: deviceID,
+            volume: 0.0
+        )
+
+        guard success else {
+            print("Failed to set input volume to 0%.")
+            savedVolume = nil
+            return
+        }
+
+        isVolumeZeroed = true
+
+        print("Microphone volume set to 0%.")
+    }
+}
+
 
 // main
 let deviceID = getDefaultInputDevice()
@@ -171,33 +254,53 @@ if let volume = getInputVolume(
 }
 
 // set volume to 0
-print("Setting input volume to 0%...")
+// print("Setting input volume to 0%...")
 
-let success = setInputVolume(
-    deviceID: deviceID,
-    volume: 0.0
-)
+// let success = setInputVolume(
+//     deviceID: deviceID,
+//     volume: 0.0
+// )
 
-guard success else {
-    print("Failed to change input volume.")
-    exit(1)
-}
+// guard success else {
+//     print("Failed to change input volume.")
+//     exit(1)
+// }
 
-// read input volume again to confirm change
-guard let newVolume = getInputVolume(
-    deviceID: deviceID
-) else {
+// // read input volume again to confirm change
+// guard let newVolume = getInputVolume(
+//     deviceID: deviceID
+// ) else {
 
-    print("Volume was changed, but could not be read back.")
-    exit(1)
-}
+//     print("Volume was changed, but could not be read back.")
+//     exit(1)
+// }
 
-print(
-    String(
-        format: "New input volume: %.1f%%",
-        newVolume * 100
-    )
-)
+// print(
+//     String(
+//         format: "New input volume: %.1f%%",
+//         newVolume * 100
+//     )
+// )
+
+// print()
+// print("Done.")
+
+let microphone = MicrophoneVolumeManager()
+
+print("Testing microphone volume toggle.")
+print()
+print("Press ENTER to set the microphone to 0%.")
+
+_ = readLine()
+
+microphone.toggle()
+
+print()
+print("Press ENTER to restore the previous volume.")
+
+_ = readLine()
+
+microphone.toggle()
 
 print()
 print("Done.")
