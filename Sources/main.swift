@@ -105,6 +105,42 @@ func getInputVolume(deviceID: AudioDeviceID) -> Float32? {
     return volume
 }
 
+// set the master input volume to 0
+func setInputVolume(deviceID: AudioDeviceID,volume: Float32) -> Bool {
+
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyVolumeScalar,
+        mScope: kAudioObjectPropertyScopeInput,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    // make sure the value stays between 0 and 1
+    var newVolume = min(max(volume, 0.0),1.0)
+
+    let size = UInt32(
+        MemoryLayout<Float32>.size
+    )
+
+    let status = AudioObjectSetPropertyData(
+        deviceID,
+        &address,
+        0,
+        nil,
+        size,
+        &newVolume
+    )
+
+    guard status == noErr else {
+
+        print("Failed to set input volume.")
+        print("OSStatus: \(status)")
+
+        return false
+    }
+
+    return true
+}
+
 
 // main
 let deviceID = getDefaultInputDevice()
@@ -133,3 +169,35 @@ if let volume = getInputVolume(
 
     print("Could not read input volume.")
 }
+
+// set volume to 0
+print("Setting input volume to 0%...")
+
+let success = setInputVolume(
+    deviceID: deviceID,
+    volume: 0.0
+)
+
+guard success else {
+    print("Failed to change input volume.")
+    exit(1)
+}
+
+// read input volume again to confirm change
+guard let newVolume = getInputVolume(
+    deviceID: deviceID
+) else {
+
+    print("Volume was changed, but could not be read back.")
+    exit(1)
+}
+
+print(
+    String(
+        format: "New input volume: %.1f%%",
+        newVolume * 100
+    )
+)
+
+print()
+print("Done.")
