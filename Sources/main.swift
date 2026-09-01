@@ -322,12 +322,12 @@ print("MicVolumeKey starting...")
 // We use the raw value because Swift's CGEventType does not
 // expose this event type as `.systemDefined` in this SDK.
 // Normal keyboard press/release events.
-let keyDownEventType = CGEventType.keyDown
-let keyUpEventType = CGEventType.keyUp
-
+// We only need keyDown.
+//
+// We don't want the microphone to toggle twice when the key
+// is pressed and then released.
 let eventMask =
-    (CGEventMask(1) << keyDownEventType.rawValue) |
-    (CGEventMask(1) << keyUpEventType.rawValue)
+    CGEventMask(1) << CGEventType.keyDown.rawValue
 
 
 // This callback receives system-defined events.
@@ -337,27 +337,52 @@ let callback: CGEventTapCallBack = {
     event,
     userInfo in
 
-    guard type == .keyDown || type == .keyUp else {
+    // We only asked for keyDown events, but keep this check
+    // for safety.
+    guard type == .keyDown else {
         return Unmanaged.passUnretained(event)
     }
 
     let keyCode = event.getIntegerValueField(
-        .keyboardEventKeycode
+    .keyboardEventKeycode
     )
 
-    print("""
-    
-    ------------------------------------------------------------
-    Keyboard event
-      type:    \(type == .keyDown ? "keyDown" : "keyUp")
-      keyCode: \(keyCode)
-    ------------------------------------------------------------
-    """)
+// Ignore auto-repeat events.
+//
+// A single physical press of the Dictation key can produce
+// multiple keyDown events. The first one has autorepeat = 0;
+// subsequent repeated events have autorepeat = 1.
+let isAutoRepeat = event.getIntegerValueField(
+    .keyboardEventAutorepeat
+) != 0
 
-    return Unmanaged.passUnretained(event)
+if keyCode == 176 {
+
+    let flags = event.flags.rawValue
+
+    // A single physical Dictation-key press produces two
+    // keyDown events on this Mac.
+    //
+    // The first event:
+    //     flags = 0x00800100
+    //
+    // The second event:
+    //     flags = 0xE0800000
+    //
+    // We only want to respond to the first event.
+    //
+    // For now, use the observed flag value to distinguish it.
+    let isFirstDictationEvent = flags == 0x00800100
+
+    if isFirstDictationEvent {
+        print("Dictation key pressed.")
+        microphone.toggle()
+    }
 }
-
-
+// Return the event unchanged for now.
+// This means macOS still receives the Dictation key.
+return Unmanaged.passUnretained(event)
+}
 // ============================================================
 // MARK: - Create Event Tap
 // ============================================================
