@@ -360,27 +360,21 @@ if keyCode == 176 {
 
     let flags = event.flags.rawValue
 
-    // A single physical Dictation-key press produces two
-    // keyDown events on this Mac.
-    //
-    // The first event:
-    //     flags = 0x00800100
-    //
-    // The second event:
-    //     flags = 0xE0800000
-    //
-    // We only want to respond to the first event.
-    //
-    // For now, use the observed flag value to distinguish it.
     let isFirstDictationEvent = flags == 0x00800100
 
     if isFirstDictationEvent {
         print("Dictation key pressed.")
         microphone.toggle()
+
+        // Consume the Dictation key event.
+        //
+        // Returning nil means the event is discarded and
+        // will not continue to macOS's normal keyboard
+        // handling.
+        return nil
     }
 }
-// Return the event unchanged for now.
-// This means macOS still receives the Dictation key.
+
 return Unmanaged.passUnretained(event)
 }
 // ============================================================
@@ -390,7 +384,7 @@ return Unmanaged.passUnretained(event)
 guard let eventTap = CGEvent.tapCreate(
     tap: .cgSessionEventTap,
     place: .headInsertEventTap,
-    options: .listenOnly,
+    options: .defaultTap,
     eventsOfInterest: eventMask,
     callback: callback,
     userInfo: nil
@@ -459,8 +453,11 @@ Keyboard event monitor running.
 
 Press the physical 🎙️ Dictation key.
 
-The program is ONLY observing the event.
-It will NOT change your microphone volume yet.
+The Dictation key is intercepted by this program.
+
+Pressing it should:
+    1. Toggle microphone input volume
+    2. Prevent macOS Dictation from activating
 
 Press Ctrl+C to quit.
 ============================================================
