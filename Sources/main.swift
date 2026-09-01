@@ -1,5 +1,7 @@
 import Foundation
 import CoreAudio
+import CoreGraphics
+import AppKit
 
 // Gets the audio device that macOS currently considers the default input device.
 // This is normally MacBook's built-in mic, unless you selected another mic.
@@ -285,22 +287,160 @@ if let volume = getInputVolume(
 // print()
 // print("Done.")
 
+// let microphone = MicrophoneVolumeManager()
+
+// print("Testing microphone volume toggle.")
+// print()
+// print("Press ENTER to set the microphone to 0%.")
+
+// _ = readLine()
+
+// microphone.toggle()
+
+// print()
+// print("Press ENTER to restore the previous volume.")
+
+// _ = readLine()
+
+// microphone.toggle()
+
+// print()
+// print("Done.")
+
+// mic manager is still created here, but we're not calling toggle() yet
+// keyboard handling will be connected to it in a later step
 let microphone = MicrophoneVolumeManager()
 
-print("Testing microphone volume toggle.")
-print()
-print("Press ENTER to set the microphone to 0%.")
+print("MicVolumeKey starting...")
 
-_ = readLine()
+// ============================================================
+// MARK: - Keyboard Event Diagnostic
+// ============================================================
 
-microphone.toggle()
+// kCGEventSystemDefined = 14.
+//
+// We use the raw value because Swift's CGEventType does not
+// expose this event type as `.systemDefined` in this SDK.
+// Normal keyboard press/release events.
+let keyDownEventType = CGEventType.keyDown
+let keyUpEventType = CGEventType.keyUp
 
-print()
-print("Press ENTER to restore the previous volume.")
+let eventMask =
+    (CGEventMask(1) << keyDownEventType.rawValue) |
+    (CGEventMask(1) << keyUpEventType.rawValue)
 
-_ = readLine()
 
-microphone.toggle()
+// This callback receives system-defined events.
+let callback: CGEventTapCallBack = {
+    proxy,
+    type,
+    event,
+    userInfo in
 
-print()
-print("Done.")
+    guard type == .keyDown || type == .keyUp else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    let keyCode = event.getIntegerValueField(
+        .keyboardEventKeycode
+    )
+
+    print("""
+    
+    ------------------------------------------------------------
+    Keyboard event
+      type:    \(type == .keyDown ? "keyDown" : "keyUp")
+      keyCode: \(keyCode)
+    ------------------------------------------------------------
+    """)
+
+    return Unmanaged.passUnretained(event)
+}
+
+
+// ============================================================
+// MARK: - Create Event Tap
+// ============================================================
+
+guard let eventTap = CGEvent.tapCreate(
+    tap: .cgSessionEventTap,
+    place: .headInsertEventTap,
+    options: .listenOnly,
+    eventsOfInterest: eventMask,
+    callback: callback,
+    userInfo: nil
+) else {
+
+    print("""
+    
+    ERROR: Could not create keyboard event tap.
+    
+    Make sure Terminal has permission under:
+    
+        System Settings
+        → Privacy & Security
+        → Accessibility
+    
+    and, if necessary:
+    
+        System Settings
+        → Privacy & Security
+        → Input Monitoring
+    
+    After changing permissions, completely quit Terminal
+    and reopen it.
+    
+    """)
+
+    exit(1)
+}
+
+
+// Create a RunLoop source for the event tap.
+guard let runLoopSource = CFMachPortCreateRunLoopSource(
+    kCFAllocatorDefault,
+    eventTap,
+    0
+) else {
+
+    print("ERROR: Could not create event tap RunLoop source.")
+    exit(1)
+}
+
+
+// Attach the event tap to the RunLoop.
+CFRunLoopAddSource(
+    CFRunLoopGetCurrent(),
+    runLoopSource,
+    .commonModes
+)
+
+
+// Enable the event tap.
+CGEvent.tapEnable(
+    tap: eventTap,
+    enable: true
+)
+
+
+// ============================================================
+// MARK: - Start Monitoring
+// ============================================================
+
+print("""
+    
+============================================================
+Keyboard event monitor running.
+
+Press the physical 🎙️ Dictation key.
+
+The program is ONLY observing the event.
+It will NOT change your microphone volume yet.
+
+Press Ctrl+C to quit.
+============================================================
+""")
+
+
+// Keep the program alive.
+CFRunLoopRun()
